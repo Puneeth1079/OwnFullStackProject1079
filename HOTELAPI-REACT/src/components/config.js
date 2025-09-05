@@ -1,5 +1,5 @@
 const config = {
-    url: "http://localhost:2001/hotelapi"
+    url: "/hotelapi"
 }
 
 export default config;
