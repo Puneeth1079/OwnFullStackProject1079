@@ -24,9 +24,20 @@ const HotelManager = () => {
   // Make sure config.url === "http://localhost:2001"
   const baseUrl = `${config.url}/roomapi`;
 
-  useEffect(() => {
-    fetchAllRooms();
-  }, []);
+ useEffect(() => {
+  const loadRooms = async () => {
+    try {
+      const res = await axios.get(`${baseUrl}/all`);
+      setRooms(res.data || []);
+    } catch (error) {
+      setMessage('Error: Failed to fetch rooms.');
+      console.error(error);
+    }
+  };
+  loadRooms();
+}, [baseUrl]);
+
+
 
   const fetchAllRooms = async () => {
     try {
