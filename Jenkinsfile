@@ -30,7 +30,7 @@ pipeline {
         // ===== BACKEND BUILD =====
         stage('Build Backend') {
             steps {
-                dir('HotelApi') {                        // was STUDENTAPI-SPRINGBOOT
+                dir('HotelApi') {                        // was HOTELAPI-SPRINGBOOT
                     bat 'mvn clean package'
                 }
             }
