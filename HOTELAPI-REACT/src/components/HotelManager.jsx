@@ -71,7 +71,8 @@ const HotelManager = () => {
     if (!validateForm(false)) return;
     try {
       // ✅ do NOT send id on add
-      const { id, ...payload } = room;
+      const { id: _ID_UNUSED, ...payload } = room;  // ✅ renamed, linter won't complain
+
       payload.pricePerNight = Number(room.pricePerNight);
       payload.capacity = Number(room.capacity);
 
