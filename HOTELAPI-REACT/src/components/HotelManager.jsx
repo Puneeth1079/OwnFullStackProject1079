@@ -3,6 +3,18 @@ import axios from 'axios';
 import './style.css';
 import config from './config.js';
 
+const columns = [
+  'id',
+  'name',
+  'type',
+  'status',
+  'pricePerNight',
+  'capacity',
+  'floor',
+  'amenities',
+  'description',
+];
+
 const HotelManager = () => {
   const [rooms, setRooms] = useState([]);
   const [room, setRoom] = useState({
@@ -14,145 +26,152 @@ const HotelManager = () => {
     capacity: '',
     floor: '',
     amenities: '',
-    description: ''
+    description: '',
   });
   const [idToFetch, setIdToFetch] = useState('');
   const [fetchedRoom, setFetchedRoom] = useState(null);
   const [message, setMessage] = useState('');
   const [editMode, setEditMode] = useState(false);
 
-  // Make sure config.url === "http://localhost:2001"
-  const baseUrl = `${config.url}/roomapi`;
+  // Backend base url (controller is @RequestMapping("/hotelapi"))
+  const baseUrl = `${config.url}/hotelapi`;
 
- useEffect(() => {
-  const loadRooms = async () => {
-    try {
-      const res = await axios.get(`${baseUrl}/all`);
-      setRooms(res.data || []);
-    } catch (error) {
-      setMessage('Error: Failed to fetch rooms.');
-      console.error(error);
-    }
-  };
-  loadRooms();
-}, [baseUrl]);
-
-
+  useEffect(() => {
+    fetchAllRooms();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [baseUrl]);
 
   const fetchAllRooms = async () => {
     try {
       const res = await axios.get(`${baseUrl}/all`);
-      setRooms(res.data || []);
+      setRooms(Array.isArray(res.data) ? res.data : []);
     } catch (error) {
-      setMessage('Error: Failed to fetch rooms.');
-      console.error(error);
+      const status = error.response?.status ?? '';
+      const body = error.response?.data ?? error.message;
+      setMessage(`Error ${status}: Failed to fetch rooms. ${typeof body === 'string' ? body : ''}`);
+      console.error('GET /all error:', error);
     }
   };
 
   const handleChange = (e) => {
-    setRoom({ ...room, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setRoom((prev) => ({ ...prev, [name]: value }));
   };
 
-  // ✅ separate validation for add vs edit
-  const validateForm = (isEdit) => {
-    const required = ['name', 'type', 'status', 'pricePerNight', 'capacity', 'floor'];
-    for (let key of required) {
+  const validateForm = () => {
+    const required = ['id', 'name', 'type', 'status', 'pricePerNight', 'capacity', 'floor'];
+    for (const key of required) {
       if (!room[key] || room[key].toString().trim() === '') {
         setMessage(`Please fill out the ${key} field.`);
         return false;
       }
     }
-    if (isEdit && (!room.id || room.id.toString().trim() === '')) {
-      setMessage('id is required for update.');
+    if (Number.isNaN(Number(room.id)) || Number(room.id) <= 0) {
+      setMessage('id must be a positive number.');
       return false;
     }
-    // number checks
-    if (isNaN(Number(room.pricePerNight)) || Number(room.pricePerNight) < 0) {
+    if (Number.isNaN(Number(room.pricePerNight)) || Number(room.pricePerNight) < 0) {
       setMessage('pricePerNight must be a non-negative number.');
       return false;
     }
-    if (isNaN(Number(room.capacity)) || Number(room.capacity) <= 0) {
+    if (Number.isNaN(Number(room.capacity)) || Number(room.capacity) <= 0) {
       setMessage('capacity must be a positive number.');
+      return false;
+    }
+    if (Number.isNaN(Number(room.floor))) {
+      setMessage('floor must be a number.');
       return false;
     }
     return true;
   };
 
   const addRoom = async () => {
-    if (!validateForm(false)) return;
+    if (!validateForm()) return;
     try {
-      // ✅ do NOT send id on add
-      const { id: _ID_UNUSED, ...payload } = room;  // ✅ renamed, linter won't complain
-
-      payload.pricePerNight = Number(room.pricePerNight);
-      payload.capacity = Number(room.capacity);
-
+      const payload = {
+        ...room,
+        id: Number(room.id),
+        pricePerNight: Number(room.pricePerNight),
+        capacity: Number(room.capacity),
+        floor: Number(room.floor),
+      };
       await axios.post(`${baseUrl}/add`, payload, {
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
       });
       setMessage('Room added successfully.');
       await fetchAllRooms();
       resetForm();
     } catch (error) {
-      const msg = error.response?.data || error.message || 'Error adding room.';
+      const msg = error.response?.data ?? error.message ?? 'Error adding room.';
       setMessage(typeof msg === 'string' ? msg : 'Error adding room.');
-      console.error('Add error:', error);
+      console.error('POST /add error:', error);
     }
   };
 
   const updateRoom = async () => {
-    if (!validateForm(true)) return;
+    if (!validateForm()) return;
     try {
       const payload = {
         ...room,
-        id: Number(room.id), // ✅ ensure number
+        id: Number(room.id),
         pricePerNight: Number(room.pricePerNight),
-        capacity: Number(room.capacity)
+        capacity: Number(room.capacity),
+        floor: Number(room.floor),
       };
       await axios.put(`${baseUrl}/update`, payload, {
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
       });
       setMessage('Room updated successfully.');
       await fetchAllRooms();
       resetForm();
     } catch (error) {
-      const msg = error.response?.data || error.message || 'Error updating room.';
+      const msg = error.response?.data ?? error.message ?? 'Error updating room.';
       setMessage(typeof msg === 'string' ? msg : 'Error updating room.');
-      console.error('Update error:', error);
+      console.error('PUT /update error:', error);
     }
   };
 
   const deleteRoom = async (id) => {
     try {
       const res = await axios.delete(`${baseUrl}/delete/${id}`);
-      setMessage(res.data || 'Room deleted.');
+      setMessage(typeof res.data === 'string' ? res.data : 'Room deleted.');
       await fetchAllRooms();
     } catch (error) {
-      const msg = error.response?.data || error.message || 'Error deleting room.';
+      const msg = error.response?.data ?? error.message ?? 'Error deleting room.';
       setMessage(typeof msg === 'string' ? msg : 'Error deleting room.');
-      console.error('Delete error:', error);
+      console.error('DELETE /delete error:', error);
     }
   };
 
   const getRoomById = async () => {
-    try {
-      const res = await axios.get(`${baseUrl}/get/${idToFetch}`);
+  try {
+    const res = await axios.get(`${baseUrl}/get/${idToFetch}`);
+    if (!res.data || Object.keys(res.data).length === 0) {
+      setFetchedRoom(null);
+      setMessage(`❌ Room with ID ${idToFetch} not found.`);
+    } else {
       setFetchedRoom(res.data);
       setMessage('');
-    } catch (error) {
-      setFetchedRoom(null);
-      const msg = error.response?.data || 'Room not found.';
-      setMessage(typeof msg === 'string' ? msg : 'Room not found.');
-      console.error('Get by id error:', error);
     }
-  };
+  } catch (error) {
+    setFetchedRoom(null);
+    const msg = error.response?.data || 'Room not found.';
+    setMessage(`❌ ${msg}`);
+  }
+};
+
 
   const handleEdit = (r) => {
     setRoom({
-      ...r,
       id: String(r.id ?? ''),
+      name: String(r.name ?? ''),
+      type: String(r.type ?? ''),
+      status: String(r.status ?? ''),
       pricePerNight: String(r.pricePerNight ?? ''),
-      capacity: String(r.capacity ?? '')
+      capacity: String(r.capacity ?? ''),
+      floor: String(r.floor ?? ''),
+      amenities: String(r.amenities ?? ''),
+      description: String(r.description ?? ''),
     });
     setEditMode(true);
     setMessage(`Editing room with ID ${r.id}`);
@@ -168,7 +187,7 @@ const HotelManager = () => {
       capacity: '',
       floor: '',
       amenities: '',
-      description: ''
+      description: '',
     });
     setEditMode(false);
   };
@@ -176,7 +195,7 @@ const HotelManager = () => {
   return (
     <div className="student-container">
       {message && (
-        <div className={`message-banner ${message.toLowerCase().includes('error') ? 'error' : 'success'}`}>
+        <div className={`message-banner ${String(message).toLowerCase().includes('error') ? 'error' : 'success'}`}>
           {message}
         </div>
       )}
@@ -186,16 +205,20 @@ const HotelManager = () => {
       <div>
         <h3>{editMode ? 'Edit Room Details' : 'Add Room'}</h3>
         <div className="form-grid">
-          {/* ✅ ID only for edit; disabled during add */}
           <input
             type="number"
             name="id"
-            placeholder="ID (auto for add)"
+            placeholder="ID"
             value={room.id}
             onChange={handleChange}
-            disabled={!editMode}
           />
-          <input type="text" name="name" placeholder="Room Name (e.g., Deluxe 204)" value={room.name} onChange={handleChange} />
+          <input
+            type="text"
+            name="name"
+            placeholder="Room Name (e.g., Deluxe 204)"
+            value={room.name}
+            onChange={handleChange}
+          />
 
           <select name="type" value={room.type} onChange={handleChange}>
             <option value="">Select Type</option>
@@ -211,11 +234,41 @@ const HotelManager = () => {
             <option value="MAINTENANCE">MAINTENANCE</option>
           </select>
 
-          <input type="number" name="pricePerNight" placeholder="Price per Night" value={room.pricePerNight} onChange={handleChange} />
-          <input type="number" name="capacity" placeholder="Capacity (guests)" value={room.capacity} onChange={handleChange} />
-          <input type="text" name="floor" placeholder="Floor" value={room.floor} onChange={handleChange} />
-          <input type="text" name="amenities" placeholder="Amenities (comma-separated)" value={room.amenities} onChange={handleChange} />
-          <input type="text" name="description" placeholder="Description" value={room.description} onChange={handleChange} />
+          <input
+            type="number"
+            name="pricePerNight"
+            placeholder="Price per Night"
+            value={room.pricePerNight}
+            onChange={handleChange}
+          />
+          <input
+            type="number"
+            name="capacity"
+            placeholder="Capacity (guests)"
+            value={room.capacity}
+            onChange={handleChange}
+          />
+          <input
+            type="number"
+            name="floor"
+            placeholder="Floor"
+            value={room.floor}
+            onChange={handleChange}
+          />
+          <input
+            type="text"
+            name="amenities"
+            placeholder="Amenities (comma-separated)"
+            value={room.amenities}
+            onChange={handleChange}
+          />
+          <input
+            type="text"
+            name="description"
+            placeholder="Description"
+            value={room.description}
+            onChange={handleChange}
+          />
         </div>
 
         <div className="btn-group">
@@ -232,7 +285,12 @@ const HotelManager = () => {
 
       <div>
         <h3>Get Room By ID</h3>
-        <input type="number" value={idToFetch} onChange={(e) => setIdToFetch(e.target.value)} placeholder="Enter ID" />
+        <input
+          type="number"
+          value={idToFetch}
+          onChange={(e) => setIdToFetch(e.target.value)}
+          placeholder="Enter ID"
+        />
         <button className="btn-blue" onClick={getRoomById}>Fetch</button>
 
         {fetchedRoom && (
@@ -252,7 +310,7 @@ const HotelManager = () => {
             <table>
               <thead>
                 <tr>
-                  {Object.keys(room).map((key) => (
+                  {columns.map((key) => (
                     <th key={key}>{key}</th>
                   ))}
                   <th>Actions</th>
@@ -261,8 +319,8 @@ const HotelManager = () => {
               <tbody>
                 {rooms.map((r) => (
                   <tr key={r.id}>
-                    {Object.keys(room).map((key) => (
-                      <td key={key}>{String(r[key] ?? '')}</td>
+                    {columns.map((key) => (
+                      <td key={key}>{String(r?.[key] ?? '')}</td>
                     ))}
                     <td>
                       <div className="action-buttons">
